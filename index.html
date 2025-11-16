@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音に合わせて(いる動画を)当ててみましょう</title>
+    <title>動画クイズ</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -25,7 +25,6 @@
             text-align: center;
         }
 
-        /* ★追加：前回のスコア表示 */
         #last-score {
             font-size: 1.5rem;
             color: #333;
@@ -33,25 +32,50 @@
             margin-bottom: 20px;
         }
 
-        #start-button {
-            font-size: 1.5rem;
+        /* ★追加：モード選択ボタンのコンテナ */
+        #mode-selection {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        /* ★変更：スタートボタンのスタイルを共通化 */
+        .start-button {
+            font-size: 1.2rem; /* 少し小さくして2つ並べる */
             padding: 15px 30px;
             border-radius: 10px;
             border: none;
-            background-color: #007bff;
             color: white;
             cursor: pointer;
             transition: background-color 0.3s ease;
         }
 
-        #start-button:hover {
+        /* ★追加：ボタンの色分け */
+        #start-button-sound {
+            background-color: #007bff; /* 青 */
+        }
+        #start-button-sound:hover {
             background-color: #0056b3;
         }
+        #start-button-silent {
+            background-color: #28a745; /* 緑 */
+        }
+        #start-button-silent:hover {
+            background-color: #1e7e34;
+        }
+
 
         /* --- クイズ画面 --- */
         #quiz-screen {
             width: 90%;
             max-width: 800px;
+        }
+        
+        /* ★追加：クイズタイトル（H2） */
+        #quiz-title {
+            text-align: center;
+            color: #555;
+            font-size: 1.8rem;
         }
 
         #timer {
@@ -116,15 +140,21 @@
 </head>
 <body>
 
-    <h1>音に合わせて(いる動画を)当ててみましょう</h1>
+    <h1>音に合わせて当ててみましょう</h1>
 
     <div id="start-screen">
-        <p>(金星のダンスの)音に合わせて踊っている動画をクリックしてね</p>
+        <h2>モードを選んでください</h2>
         <p id="last-score" class="hidden"></p>
-        <button id="start-button">踊ってみましょう</button>
+        
+        <div id="mode-selection">
+            <button id="start-button-sound" class="start-button">金星の真島茂樹モード</button>
+            <button id="start-button-silent" class="start-button">金星の真島茂樹どもモード</button>
+        </div>
     </div>
 
     <div id="quiz-screen" class="hidden">
+        <h2 id="quiz-title"></h2>
+        
         <div id="timer">10</div>
         <div id="video-grid">
             <video id="v0" loop playsinline></video>
@@ -177,44 +207,58 @@
         // --- DOM要素の取得 ---
         const startScreen = document.getElementById('start-screen');
         const quizScreen = document.getElementById('quiz-screen');
-        const startButton = document.getElementById('start-button');
         const timerEl = document.getElementById('timer');
         const resultEl = document.getElementById('result');
         const videos = document.querySelectorAll('#video-grid video');
-        const lastScoreEl = document.getElementById('last-score'); // ★追加
+        const lastScoreEl = document.getElementById('last-score');
+        
+        // ★追加：新しいDOM要素
+        const startButtonSound = document.getElementById('start-button-sound');
+        const startButtonSilent = document.getElementById('start-button-silent');
+        const quizTitleEl = document.getElementById('quiz-title');
 
         // --- グローバル変数 ---
         let timerInterval = null;
         let timeLeft = TIME_LIMIT;
-        let consecutiveWins = 0; // ★追加：連続成功回数
+        let consecutiveWins = 0; 
+        let currentQuizMode = 'findSound'; // ★追加：現在のクイズモード
 
         // --- イベントリスナー ---
-        
-        // ★変更：ページロード時にプリロードを実行
         document.addEventListener('DOMContentLoaded', preloadVideos);
-        startButton.addEventListener('click', startGame);
+        
+        // ★変更：モードごとにスタート関数を呼び出す
+        startButtonSound.addEventListener('click', () => startGame('findSound'));
+        startButtonSilent.addEventListener('click', () => startGame('findSilent'));
 
         // --- 関数 ---
 
         /**
-         * ★追加：動画のメタデータを先行読み込みする
+         * 動画のメタデータを先行読み込みする
          */
         function preloadVideos() {
             console.log('Preloading video metadata...');
             videoSources.forEach(src => {
                 const video = document.createElement('video');
                 video.src = src;
-                video.preload = 'metadata'; // 'metadata'で動画の基本情報だけ読み込む
+                video.preload = 'metadata';
             });
         }
 
         /**
-         * クイズを開始する
+         * ★変更：クイズモードを指定して開始する
+         * @param {string} mode - 'findSound' または 'findSilent'
          */
-        function startGame() {
-            // ★変更：スタート画面の表示をリセット
-            lastScoreEl.classList.add('hidden');
-            startButton.textContent = 'クイズ開始';
+        function startGame(mode) {
+            currentQuizMode = mode; // モードをグローバル変数に保存
+            
+            // クイズタイトルを設定
+            if (currentQuizMode === 'findSound') {
+                quizTitleEl.textContent = '音に合わせて(いる動画を)当ててみましょう';
+            } else {
+                quizTitleEl.textContent = '音に合わせて(いない動画を)当ててみましょう';
+            }
+            
+            lastScoreEl.classList.add('hidden'); // スコア表示を隠す
             
             startScreen.classList.add('hidden');
             quizScreen.classList.remove('hidden');
@@ -232,13 +276,24 @@
             timerEl.textContent = timeLeft;
             timerEl.style.color = '#d9534f'; 
 
+            // 正解（または不正解）の動画をランダムに決定
             const correctIndex = Math.floor(Math.random() * 4);
             const selectedVideos = shuffleArray(videoSources).slice(0, 4);
 
             videos.forEach((video, index) => {
                 video.src = selectedVideos[index];
-                video.muted = (index !== correctIndex);
                 video.currentTime = 0; 
+
+                // ★変更：クイズモードに基づいてミュート設定を決定
+                if (currentQuizMode === 'findSound') {
+                    // 「音あり」を探すモード（従来通り）
+                    // 正解(correctIndex)だけミュートを解除
+                    video.muted = (index !== correctIndex);
+                } else {
+                    // 「音なし」を探すモード（逆）
+                    // 正解(correctIndex)だけミュート
+                    video.muted = (index === correctIndex);
+                }
                 
                 video.play().catch(e => {
                     console.warn("Autoplay failed:", e);
@@ -265,7 +320,7 @@
             if (timeLeft <= 0) {
                 clearInterval(timerInterval);
                 showResult(false, "時間切れ！");
-                cleanupAndNext(false); // ★変更：失敗を渡す
+                cleanupAndNext(false);
             }
         }
 
@@ -274,14 +329,23 @@
          */
         function handleVideoClick(event) {
             clearInterval(timerInterval);
-            const isCorrect = !event.currentTarget.muted;
+
+            // ★変更：クイズモードに基づいて正解判定
+            let isCorrect;
+            if (currentQuizMode === 'findSound') {
+                // 「音あり」モード：ミュートされてない(false)のが正解
+                isCorrect = !event.currentTarget.muted;
+            } else {
+                // 「音なし」モード：ミュートされている(true)のが正解
+                isCorrect = event.currentTarget.muted;
+            }
             
             showResult(isCorrect);
-            cleanupAndNext(isCorrect); // ★変更：結果を渡す
+            cleanupAndNext(isCorrect);
         }
 
         /**
-         * 正解・不正解を表示する (★変更：連続回数表示は削除)
+         * 正解・不正解を表示する
          */
         function showResult(isCorrect, message = '') {
             resultEl.classList.remove('hidden', 'correct', 'incorrect');
@@ -299,11 +363,9 @@
         }
 
         /**
-         * ★変更：ラウンド終了処理と次のアクションの分岐
-         * @param {boolean} wasCorrect - このラウンドで正解したか
+         * ラウンド終了処理と次のアクションの分岐
          */
         function cleanupAndNext(wasCorrect) {
-            // 動画のクリーンアップ
             videos.forEach(video => {
                 video.pause();
                 video.muted = true;
@@ -311,25 +373,17 @@
             });
 
             if (wasCorrect) {
-                // 正解した場合
-                consecutiveWins++; // 連続成功をカウントアップ
-                // 遅延後に次のクイズへ
+                consecutiveWins++;
                 setTimeout(setupQuiz, RESULT_DELAY);
             } else {
-                // 失敗した場合
-                // 遅延後にスタート画面に戻る
+                // 失敗時はスタート画面に戻る
                 setTimeout(() => {
                     quizScreen.classList.add('hidden');
                     startScreen.classList.remove('hidden');
                     
-                    // スタート画面に最終スコアを表示
                     lastScoreEl.textContent = `スコア: ${consecutiveWins} 点`;
                     lastScoreEl.classList.remove('hidden');
                     
-                    // ボタンのテキストを変更
-                    startButton.textContent = 'もう一回';
-
-                    // 連続成功回数をリセット
                     consecutiveWins = 0; 
                 }, RESULT_DELAY);
             }
