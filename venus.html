@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音に合わせて(いる動画を)当ててみましょう</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            margin: 0;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        /* --- スタート画面 --- */
+        #start-screen {
+            text-align: center;
+        }
+
+        /* ★追加：前回のスコア表示 */
+        #last-score {
+            font-size: 1.5rem;
+            color: #333;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        #start-button {
+            font-size: 1.5rem;
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #start-button:hover {
+            background-color: #0056b3;
+        }
+
+        /* --- クイズ画面 --- */
+        #quiz-screen {
+            width: 90%;
+            max-width: 800px;
+        }
+
+        #timer {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #d9534f;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            border: 5px solid #ccc;
+            border-radius: 10px;
+            padding: 15px;
+            background-color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        video {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        video:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+        }
+
+        #result {
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        /* --- ユーティリティクラス --- */
+        .hidden {
+            display: none;
+        }
+
+        .correct {
+            color: #28a745;
+            background-color: #e6f7ec;
+            border: 2px solid #28a745;
+        }
+
+        .incorrect {
+            color: #dc3545;
+            background-color: #fbebee;
+            border: 2px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>音に合わせて(いる動画を)当ててみましょう</h1>
+
+    <div id="start-screen">
+        <p>音に合わせて踊っている動画をクリックしてね</p>
+        <p id="last-score" class="hidden"></p>
+        <button id="start-button">クイズ開始</button>
+    </div>
+
+    <div id="quiz-screen" class="hidden">
+        <div id="timer">10</div>
+        <div id="video-grid">
+            <video id="v0" loop playsinline></video>
+            <video id="v1" loop playsinline></video>
+            <video id="v2" loop playsinline></video>
+            <video id="v3" loop playsinline></video>
+        </div>
+        <div id="result" class="hidden"></div>
+    </div>
+
+    <script>
+        // --- 設定 ---
+        const TIME_LIMIT = 10;
+        const RESULT_DELAY = 1500; 
+
+        // 使用する動画のリスト
+        const videoSources = [
+            '勇気を出して踊ってみましょう.mp4',
+            '音に合わせていってみましょう.mp4',
+            '音に合わせて踊ってみましょう.mp4',
+            '音楽に合わせて踊ってみましょう.mp4',
+        ];
+
+        // --- DOM要素の取得 ---
+        const startScreen = document.getElementById('start-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const startButton = document.getElementById('start-button');
+        const timerEl = document.getElementById('timer');
+        const resultEl = document.getElementById('result');
+        const videos = document.querySelectorAll('#video-grid video');
+        const lastScoreEl = document.getElementById('last-score'); // ★追加
+
+        // --- グローバル変数 ---
+        let timerInterval = null;
+        let timeLeft = TIME_LIMIT;
+        let consecutiveWins = 0; // ★追加：連続成功回数
+
+        // --- イベントリスナー ---
+        
+        // ★変更：ページロード時にプリロードを実行
+        document.addEventListener('DOMContentLoaded', preloadVideos);
+        startButton.addEventListener('click', startGame);
+
+        // --- 関数 ---
+
+        /**
+         * ★追加：動画のメタデータを先行読み込みする
+         */
+        function preloadVideos() {
+            console.log('Preloading video metadata...');
+            videoSources.forEach(src => {
+                const video = document.createElement('video');
+                video.src = src;
+                video.preload = 'metadata'; // 'metadata'で動画の基本情報だけ読み込む
+            });
+        }
+
+        /**
+         * クイズを開始する
+         */
+        function startGame() {
+            // ★変更：スタート画面の表示をリセット
+            lastScoreEl.classList.add('hidden');
+            startButton.textContent = 'クイズ開始';
+            
+            startScreen.classList.add('hidden');
+            quizScreen.classList.remove('hidden');
+            setupQuiz();
+        }
+
+        /**
+         * 新しいクイズのラウンドをセットアップする
+         */
+        function setupQuiz() {
+            resultEl.classList.add('hidden');
+            resultEl.textContent = '';
+            
+            timeLeft = TIME_LIMIT;
+            timerEl.textContent = timeLeft;
+            timerEl.style.color = '#d9534f'; 
+
+            const correctIndex = Math.floor(Math.random() * 4);
+            const selectedVideos = shuffleArray(videoSources).slice(0, 4);
+
+            videos.forEach((video, index) => {
+                video.src = selectedVideos[index];
+                video.muted = (index !== correctIndex);
+                video.currentTime = 0; 
+                
+                video.play().catch(e => {
+                    console.warn("Autoplay failed:", e);
+                });
+
+                video.removeEventListener('click', handleVideoClick);
+                video.addEventListener('click', handleVideoClick);
+            });
+
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        /**
+         * タイマーを1秒進める
+         */
+        function updateTimer() {
+            timeLeft--;
+            timerEl.textContent = timeLeft;
+
+            if (timeLeft <= 3) {
+                timerEl.style.color = 'red';
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                showResult(false, "時間切れ！");
+                cleanupAndNext(false); // ★変更：失敗を渡す
+            }
+        }
+
+        /**
+         * 動画がクリックされたときの処理
+         */
+        function handleVideoClick(event) {
+            clearInterval(timerInterval);
+            const isCorrect = !event.currentTarget.muted;
+            
+            showResult(isCorrect);
+            cleanupAndNext(isCorrect); // ★変更：結果を渡す
+        }
+
+        /**
+         * 正解・不正解を表示する (★変更：連続回数表示は削除)
+         */
+        function showResult(isCorrect, message = '') {
+            resultEl.classList.remove('hidden', 'correct', 'incorrect');
+            
+            if (message) {
+                resultEl.textContent = message;
+                resultEl.classList.add('incorrect');
+            } else if (isCorrect) {
+                resultEl.textContent = '正解！';
+                resultEl.classList.add('correct');
+            } else {
+                resultEl.textContent = '不正解...';
+                resultEl.classList.add('incorrect');
+            }
+        }
+
+        /**
+         * ★変更：ラウンド終了処理と次のアクションの分岐
+         * @param {boolean} wasCorrect - このラウンドで正解したか
+         */
+        function cleanupAndNext(wasCorrect) {
+            // 動画のクリーンアップ
+            videos.forEach(video => {
+                video.pause();
+                video.muted = true;
+                video.removeEventListener('click', handleVideoClick);
+            });
+
+            if (wasCorrect) {
+                // 正解した場合
+                consecutiveWins++; // 連続成功をカウントアップ
+                // 遅延後に次のクイズへ
+                setTimeout(setupQuiz, RESULT_DELAY);
+            } else {
+                // 失敗した場合
+                // 遅延後にスタート画面に戻る
+                setTimeout(() => {
+                    quizScreen.classList.add('hidden');
+                    startScreen.classList.remove('hidden');
+                    
+                    // スタート画面に最終スコアを表示
+                    lastScoreEl.textContent = `連続成功: ${consecutiveWins} 回`;
+                    lastScoreEl.classList.remove('hidden');
+                    
+                    // ボタンのテキストを変更
+                    startButton.textContent = 'もう一度プレイ！';
+
+                    // 連続成功回数をリセット
+                    consecutiveWins = 0; 
+                }, RESULT_DELAY);
+            }
+        }
+
+        /**
+         * 配列をシャッフルする
+         */
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+    </script>
+
+</body>
+</html>
