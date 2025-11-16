@@ -119,9 +119,9 @@
     <h1>音に合わせて(いる動画を)当ててみましょう</h1>
 
     <div id="start-screen">
-        <p>音に合わせて踊っている動画をクリックしてね</p>
+        <p>(金星のダンスの)音に合わせて踊っている動画をクリックしてね</p>
         <p id="last-score" class="hidden"></p>
-        <button id="start-button">クイズ開始</button>
+        <button id="start-button">踊ってみましょう</button>
     </div>
 
     <div id="quiz-screen" class="hidden">
@@ -327,7 +327,7 @@
                     lastScoreEl.classList.remove('hidden');
                     
                     // ボタンのテキストを変更
-                    startButton.textContent = 'もう一度プレイ！';
+                    startButton.textContent = 'もう一回';
 
                     // 連続成功回数をリセット
                     consecutiveWins = 0; 
