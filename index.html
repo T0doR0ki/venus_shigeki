@@ -32,16 +32,14 @@
             margin-bottom: 20px;
         }
 
-        /* ★追加：モード選択ボタンのコンテナ */
         #mode-selection {
             display: flex;
             gap: 20px;
             margin-top: 20px;
         }
 
-        /* ★変更：スタートボタンのスタイルを共通化 */
         .start-button {
-            font-size: 1.2rem; /* 少し小さくして2つ並べる */
+            font-size: 1.2rem;
             padding: 15px 30px;
             border-radius: 10px;
             border: none;
@@ -50,15 +48,14 @@
             transition: background-color 0.3s ease;
         }
 
-        /* ★追加：ボタンの色分け */
         #start-button-sound {
-            background-color: #007bff; /* 青 */
+            background-color: #007bff;
         }
         #start-button-sound:hover {
             background-color: #0056b3;
         }
         #start-button-silent {
-            background-color: #28a745; /* 緑 */
+            background-color: #28a745;
         }
         #start-button-silent:hover {
             background-color: #1e7e34;
@@ -71,7 +68,6 @@
             max-width: 800px;
         }
         
-        /* ★追加：クイズタイトル（H2） */
         #quiz-title {
             text-align: center;
             color: #555;
@@ -84,6 +80,21 @@
             color: #d9534f;
             text-align: center;
             margin-bottom: 20px;
+        }
+
+        /* ★追加：読み込み中スピナー */
+        #loading-spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         #video-grid {
@@ -156,8 +167,10 @@
         <h2 id="quiz-title"></h2>
         
         <div id="timer">10</div>
-        <div id="video-grid">
-            <video id="v0" loop playsinline></video>
+        
+        <div id="loading-spinner"></div>
+        
+        <div id="video-grid" class="hidden"> <video id="v0" loop playsinline></video>
             <video id="v1" loop playsinline></video>
             <video id="v2" loop playsinline></video>
             <video id="v3" loop playsinline></video>
@@ -171,6 +184,7 @@
         const RESULT_DELAY = 1500; 
 
         // 使用する動画のリスト
+        const videoSources = [
         const videoSources = [
             "Dance to the rhythm of the Dance of Venus.mp4",
             "Let's dance to the rhythm of Venus' samba (JapaneseDub).mp4",
@@ -212,21 +226,23 @@
         const videos = document.querySelectorAll('#video-grid video');
         const lastScoreEl = document.getElementById('last-score');
         
-        // ★追加：新しいDOM要素
         const startButtonSound = document.getElementById('start-button-sound');
         const startButtonSilent = document.getElementById('start-button-silent');
         const quizTitleEl = document.getElementById('quiz-title');
+
+        // ★追加：新しいDOM要素
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const videoGrid = document.getElementById('video-grid');
 
         // --- グローバル変数 ---
         let timerInterval = null;
         let timeLeft = TIME_LIMIT;
         let consecutiveWins = 0; 
-        let currentQuizMode = 'findSound'; // ★追加：現在のクイズモード
+        let currentQuizMode = 'findSound';
 
         // --- イベントリスナー ---
         document.addEventListener('DOMContentLoaded', preloadVideos);
         
-        // ★変更：モードごとにスタート関数を呼び出す
         startButtonSound.addEventListener('click', () => startGame('findSound'));
         startButtonSilent.addEventListener('click', () => startGame('findSilent'));
 
@@ -245,20 +261,18 @@
         }
 
         /**
-         * ★変更：クイズモードを指定して開始する
-         * @param {string} mode - 'findSound' または 'findSilent'
+         * クイズモードを指定して開始する
          */
         function startGame(mode) {
-            currentQuizMode = mode; // モードをグローバル変数に保存
+            currentQuizMode = mode; 
             
-            // クイズタイトルを設定
             if (currentQuizMode === 'findSound') {
                 quizTitleEl.textContent = '音に合わせて(いる動画を)当ててみましょう';
             } else {
                 quizTitleEl.textContent = '音に合わせて(いない動画を)当ててみましょう';
             }
             
-            lastScoreEl.classList.add('hidden'); // スコア表示を隠す
+            lastScoreEl.classList.add('hidden'); 
             
             startScreen.classList.add('hidden');
             quizScreen.classList.remove('hidden');
@@ -266,9 +280,9 @@
         }
 
         /**
-         * 新しいクイズのラウンドをセットアップする
+         * ★変更：非同期(async)関数に変更し、読み込み待機ロジックを追加
          */
-        function setupQuiz() {
+        async function setupQuiz() {
             resultEl.classList.add('hidden');
             resultEl.textContent = '';
             
@@ -276,34 +290,69 @@
             timerEl.textContent = timeLeft;
             timerEl.style.color = '#d9534f'; 
 
-            // 正解（または不正解）の動画をランダムに決定
+            // ★変更：タイマーを一旦停止
+            if (timerInterval) clearInterval(timerInterval);
+
+            // ★変更：動画グリッドを隠し、スピナーを表示
+            videoGrid.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+
             const correctIndex = Math.floor(Math.random() * 4);
             const selectedVideos = shuffleArray(videoSources).slice(0, 4);
+
+            // ★変更：動画の読み込みを待つためのPromise配列
+            const loadPromises = [];
 
             videos.forEach((video, index) => {
                 video.src = selectedVideos[index];
                 video.currentTime = 0; 
 
-                // ★変更：クイズモードに基づいてミュート設定を決定
                 if (currentQuizMode === 'findSound') {
-                    // 「音あり」を探すモード（従来通り）
-                    // 正解(correctIndex)だけミュートを解除
                     video.muted = (index !== correctIndex);
                 } else {
-                    // 「音なし」を探すモード（逆）
-                    // 正解(correctIndex)だけミュート
                     video.muted = (index === correctIndex);
                 }
                 
-                video.play().catch(e => {
-                    console.warn("Autoplay failed:", e);
-                });
-
                 video.removeEventListener('click', handleVideoClick);
                 video.addEventListener('click', handleVideoClick);
+
+                // ★変更：再生準備完了('canplay')を待つPromiseを作成
+                const promise = new Promise((resolve, reject) => {
+                    // 'canplay'イベントは、再生を開始できる最小限のデータが読み込まれたときに発火
+                    video.addEventListener('canplay', resolve, { once: true });
+                    video.addEventListener('error', reject, { once: true });
+                });
+                loadPromises.push(promise);
+                
+                // 読み込みを開始
+                video.load();
             });
 
-            timerInterval = setInterval(updateTimer, 1000);
+            try {
+                // ★変更：4つの動画すべての再生準備が整うまで待つ
+                await Promise.all(loadPromises);
+
+                // ★変更：準備ができたらスピナーを隠し、動画を表示
+                loadingSpinner.classList.add('hidden');
+                videoGrid.classList.remove('hidden');
+
+                // ★変更：一斉に再生開始
+                videos.forEach(video => {
+                    video.play().catch(e => {
+                        console.warn("Autoplay failed:", e);
+                    });
+                });
+
+                // ★変更：タイマーをここで開始
+                timerInterval = setInterval(updateTimer, 1000);
+
+            } catch (error) {
+                // 動画の読み込みに失敗した場合
+                console.error("動画の読み込みに失敗しました:", error);
+                // スタート画面に戻る
+                alert("動画の読み込みに失敗しました。スタート画面に戻ります。");
+                cleanupAndNext(false); // 失敗扱い
+            }
         }
 
         /**
@@ -328,15 +377,13 @@
          * 動画がクリックされたときの処理
          */
         function handleVideoClick(event) {
+            // ★変更：クリックされたらすぐにタイマーを停止
             clearInterval(timerInterval);
 
-            // ★変更：クイズモードに基づいて正解判定
             let isCorrect;
             if (currentQuizMode === 'findSound') {
-                // 「音あり」モード：ミュートされてない(false)のが正解
                 isCorrect = !event.currentTarget.muted;
             } else {
-                // 「音なし」モード：ミュートされている(true)のが正解
                 isCorrect = event.currentTarget.muted;
             }
             
@@ -366,6 +413,9 @@
          * ラウンド終了処理と次のアクションの分岐
          */
         function cleanupAndNext(wasCorrect) {
+            // ★変更：タイマーが残っていても停止（念のため）
+            clearInterval(timerInterval);
+            
             videos.forEach(video => {
                 video.pause();
                 video.muted = true;
