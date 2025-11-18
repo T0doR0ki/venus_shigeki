@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>音に合わせて当ててみましょう</title>
     <style>
-
+        /* CSSは前回とほぼ同じ */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             display: flex;
@@ -54,10 +54,12 @@
         #start-button-sound:hover {
             background-color: #0056b3;
         }
-        #start-button-silent {
+        
+        /* ★変更：IDとスタイルを変更 */
+        #start-button-find-all-sound {
             background-color: #28a745;
         }
-        #start-button-silent:hover {
+        #start-button-find-all-sound:hover {
             background-color: #1e7e34;
         }
 
@@ -112,7 +114,7 @@
             object-fit: cover;
             border-radius: 8px;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease; /* ★変更：opacityを追加 */
         }
 
         video:hover {
@@ -177,21 +179,16 @@
     </div>
 
     <script>
-        // --- ★変更：設定と難易度調整 ---
-        const BASE_TIME_LIMIT = 15; // 基本の制限時間（秒）
-        const MIN_TIME_LIMIT = 5;  // 最短の制限時間（秒）
-        const TIME_REDUCTION_PER_WIN = 0.2; // 1回成功で減る秒数 (0.2秒)
-        const SAME_UNIT_CHANCE_INCREASE = 0.05; // 1回成功で同一ユニット率が上がる確率 (5%)
+        // --- 設定と難易度調整 (変更なし) ---
+        const BASE_TIME_LIMIT = 15;
+        const MIN_TIME_LIMIT = 5;
+        const TIME_REDUCTION_PER_WIN = 0.2;
+        const SAME_UNIT_CHANCE_INCREASE = 0.05;
         const RESULT_DELAY = 1500; 
 
-        // ★変更：動画リストの構造を「ユニット」ごとの2次元配列に変更
-        //
-        // !!重要!!
-        // 1. ユニット（[ ]）は4つ以上定義してください。
-        // 2. 各ユニット（[ ]）の中には、動画URL（'...'）を4つ以上入れてください。
-        //
+        // --- 動画ユニット (変更なし) ---
         const videoUnits = [
-            // ユニット1 音に合わせて
+             // ユニット1 音に合わせて
             [
 				"音に合わせて踊ってみましょう.mp4",
 				"音楽に合わせていってみましょう.mp4",
@@ -244,10 +241,9 @@
 				"リズムに合わせって曲になります.mp4",
 				"音に合わせて元気よく.mp4"
             ]
-		
         ];
 
-        // --- DOM要素の取得 (変更なし) ---
+        // --- DOM要素の取得 ---
         const startScreen = document.getElementById('start-screen');
         const quizScreen = document.getElementById('quiz-screen');
         const timerEl = document.getElementById('timer');
@@ -255,30 +251,32 @@
         const videos = document.querySelectorAll('#video-grid video');
         const lastScoreEl = document.getElementById('last-score');
         const startButtonSound = document.getElementById('start-button-sound');
-        const startButtonSilent = document.getElementById('start-button-silent');
+        // ★変更：ID変更
+        const startButtonFindAllSound = document.getElementById('start-button-find-all-sound');
         const quizTitleEl = document.getElementById('quiz-title');
         const loadingSpinner = document.getElementById('loading-spinner');
         const videoGrid = document.getElementById('video-grid');
 
-        // --- グローバル変数 (変更なし) ---
+        // --- グローバル変数 ---
         let timerInterval = null;
-        let timeLeft = BASE_TIME_LIMIT; // ★変更：動的に変わるためletに
+        let timeLeft = BASE_TIME_LIMIT;
         let consecutiveWins = 0; 
         let currentQuizMode = 'findSound';
+        // ★追加：複数クリック用
+        let correctClicksNeeded = 0;
+        let correctClicksMade = 0;
 
-        // --- イベントリスナー (変更なし) ---
+
+        // --- イベントリスナー ---
         document.addEventListener('DOMContentLoaded', preloadVideos);
         startButtonSound.addEventListener('click', () => startGame('findSound'));
-        startButtonSilent.addEventListener('click', () => startGame('findSilent'));
+        // ★変更：モード名を 'findAllSound' に
+        startButtonFindAllSound.addEventListener('click', () => startGame('findAllSound'));
 
         // --- 関数 ---
-
-        /**
-         * ★変更：2次元配列をフラット化してプリロード
-         */
+        
         function preloadVideos() {
             console.log('Preloading video metadata...');
-            // .flat()で2次元配列を1次元配列に変換
             videoUnits.flat().forEach(src => {
                 const video = document.createElement('video');
                 video.src = src;
@@ -287,57 +285,45 @@
         }
 
         /**
-         * クイズモードを指定して開始する (変更なし)
+         * ★変更：モード名('findAllSound')に対応
          */
         function startGame(mode) {
             currentQuizMode = mode; 
             
             if (currentQuizMode === 'findSound') {
-                quizTitleEl.textContent = '音が出ている動画を当てろ！';
-            } else {
-                quizTitleEl.textContent = '音が出ていない動画を当てろ！';
+               quizTitleEl.textContent = '音に合わせて(いる動画を)当ててみましょう';
+            } else { // 'findAllSound'
+               quizTitleEl.textContent = '音に合わせて(いる動画を3つ)当ててみましょう';
             }
             
             lastScoreEl.classList.add('hidden'); 
-            
             startScreen.classList.add('hidden');
             quizScreen.classList.remove('hidden');
             setupQuiz();
         }
 
-        /**
-         * ★変更：ヘルパー関数（バラバラ問題の動画4つを選択）
-         */
+        // (selectMixedVideos, selectSameUnitVideos は変更なし)
         function selectMixedVideos() {
-            // 4つの異なるユニットをランダムに選ぶ
             const shuffledUnits = shuffleArray(videoUnits).slice(0, 4);
-            // 各ユニットからランダムに1つ動画を選ぶ
             return shuffledUnits.map(unit => {
                 return unit[Math.floor(Math.random() * unit.length)];
             });
         }
-
-        /**
-         * ★変更：ヘルパー関数（同一ユニット問題の動画4つを選択）
-         */
         function selectSameUnitVideos() {
-            // 1つのユニットをランダムに選ぶ
             const selectedUnit = videoUnits[Math.floor(Math.random() * videoUnits.length)];
-            // そのユニットから4つの異なる動画をランダムに選ぶ
             return shuffleArray(selectedUnit).slice(0, 4);
         }
 
 
         /**
-         * ★変更：非同期(async)関数、難易度ロジックを追加
+         * ★変更：セットアップロジックを修正
          */
         async function setupQuiz() {
             resultEl.classList.add('hidden');
             resultEl.textContent = '';
             
-            // ★変更：制限時間を動的に計算
             timeLeft = Math.max(MIN_TIME_LIMIT, BASE_TIME_LIMIT - (consecutiveWins * TIME_REDUCTION_PER_WIN));
-            timerEl.textContent = Math.ceil(timeLeft); // 整数で表示
+            timerEl.textContent = Math.ceil(timeLeft);
             timerEl.style.color = '#d9534f'; 
 
             if (timerInterval) clearInterval(timerInterval);
@@ -345,36 +331,48 @@
             videoGrid.classList.add('hidden');
             loadingSpinner.classList.remove('hidden');
 
-            // ★変更：難易度に応じて動画選択ロジックを分岐
             let selectedVideos;
-            // 同一ユニットになる確率（最大100% = 1.0）
             const sameUnitChance = Math.min(1, consecutiveWins * SAME_UNIT_CHANCE_INCREASE);
             
             console.log(`連続成功: ${consecutiveWins}回 / 制限時間: ${timeLeft.toFixed(1)}秒 / 同一ユニット率: ${Math.round(sameUnitChance * 100)}%`);
 
             if (Math.random() < sameUnitChance) {
-                // 同一ユニット問題
                 console.log("出題タイプ: 同一ユニット");
                 selectedVideos = selectSameUnitVideos();
             } else {
-                // バラバラ問題
                 console.log("出題タイプ: バラバラ");
                 selectedVideos = selectMixedVideos();
             }
 
-            // 正解のインデックスをランダムに決定
-            const correctIndex = Math.floor(Math.random() * 4);
+            // ★変更：targetIndexは「音なし」のインデックスとする
+            const targetIndex = Math.floor(Math.random() * 4);
             const loadPromises = [];
 
+            // ★追加：複数クリック用のカウンターをリセット
+            correctClicksNeeded = 3; // 3つ当てる
+            correctClicksMade = 0;
+
             videos.forEach((video, index) => {
-                // ★変更：選択された動画リスト(selectedVideos)から設定
                 video.src = selectedVideos[index];
                 video.currentTime = 0; 
+                video.style.opacity = '1.0'; // ★追加：opacityをリセット
+
+                // ★変更：判別用に data-is-target 属性を設定
+                // targetは「音なし」(findAllSound)または「音あり」(findSound)
+                video.dataset.isTarget = 'false';
 
                 if (currentQuizMode === 'findSound') {
-                    video.muted = (index !== correctIndex);
-                } else {
-                    video.muted = (index === correctIndex);
+                    // 「音あり」を探すモード（1つが音あり）
+                    video.muted = (index !== targetIndex);
+                    if (index === targetIndex) {
+                        video.dataset.isTarget = 'true';
+                    }
+                } else { // 'findAllSound'
+                    // 「音ありを3つ」探すモード（1つが音なし）
+                    video.muted = (index === targetIndex); // targetIndexの1つだけミュート
+                    if (index === targetIndex) {
+                        video.dataset.isTarget = 'true'; // target = 音なし動画
+                    }
                 }
                 
                 video.removeEventListener('click', handleVideoClick);
@@ -401,7 +399,7 @@
                     });
                 });
 
-                timerInterval = setInterval(updateTimer, 1000); // 1秒ごとにタイマー更新
+                timerInterval = setInterval(updateTimer, 1000);
 
             } catch (error) {
                 console.error("動画の読み込みに失敗しました:", error);
@@ -411,19 +409,18 @@
         }
 
         /**
-         * タイマーを1秒進める
+         * ★変更：updateTimerのロジックを微修正（timeLeftが1未満になったら終了）
          */
         function updateTimer() {
-            // ★変更：timeLeftを1秒減らす
             timeLeft -= 1;
             
-            timerEl.textContent = Math.ceil(timeLeft); // 整数で表示
+            timerEl.textContent = Math.ceil(Math.max(0, timeLeft)); // 0未満を表示しない
 
             if (timeLeft <= 3) {
                 timerEl.style.color = 'red';
             }
 
-            if (timeLeft <= 0) {
+            if (timeLeft < 0) { // 0秒になった瞬間はまだセーフ、それを過ぎたらアウト
                 clearInterval(timerInterval);
                 showResult(false, "時間切れ！");
                 cleanupAndNext(false);
@@ -431,20 +428,48 @@
         }
 
         /**
-         * 動画がクリックされたときの処理 (変更なし)
+         * ★変更：クリック処理をモードによって分岐
          */
         function handleVideoClick(event) {
-            clearInterval(timerInterval);
+            const clickedVideo = event.currentTarget;
+            const isTarget = clickedVideo.dataset.isTarget === 'true';
 
-            let isCorrect;
             if (currentQuizMode === 'findSound') {
-                isCorrect = !event.currentTarget.muted;
+                // --- 「音ありを1つ当てる」モード ---
+                clearInterval(timerInterval);
+                const isCorrect = isTarget; // target = 音あり動画
+                
+                showResult(isCorrect);
+                cleanupAndNext(isCorrect);
+
             } else {
-                isCorrect = event.currentTarget.muted;
+                // --- 「音ありを3つ当てる」モード ---
+                
+                if (isTarget) {
+                    // ★不正解：音なし(target)をクリックした
+                    clearInterval(timerInterval);
+                    showResult(false, "不正解...");
+                    cleanupAndNext(false);
+                
+                } else {
+                    // ☆正解：音あり(not target)をクリックした
+                    
+                    // 既にクリック済み（ミュート済み）でなければ処理
+                    if (!clickedVideo.muted) { 
+                        correctClicksMade++;
+                        clickedVideo.muted = true;
+                        clickedVideo.style.opacity = '0.4'; // 見た目をクリック済みに変更
+                    }
+
+                    // 3つすべて見つけたら勝利
+                    if (correctClicksMade === correctClicksNeeded) {
+                        clearInterval(timerInterval);
+                        showResult(true, "正解！");
+                        cleanupAndNext(true);
+                    }
+                    // (まだ3つ見つけていない場合は、タイマーは続行)
+                }
             }
-            
-            showResult(isCorrect);
-            cleanupAndNext(isCorrect);
         }
 
         /**
@@ -466,7 +491,7 @@
         }
 
         /**
-         * ラウンド終了処理と次のアクションの分岐 (変更なし)
+         * ★変更：opacityのリセットを追加
          */
         function cleanupAndNext(wasCorrect) {
             clearInterval(timerInterval);
@@ -475,6 +500,7 @@
                 video.pause();
                 video.muted = true;
                 video.removeEventListener('click', handleVideoClick);
+                video.style.opacity = '1.0'; // ★追加：opacityをリセット
             });
 
             if (wasCorrect) {
@@ -485,7 +511,7 @@
                     quizScreen.classList.add('hidden');
                     startScreen.classList.remove('hidden');
                     
-                    lastScoreEl.textContent = `前回の連続成功: ${consecutiveWins} 回`;
+                    lastScoreEl.textContent = `スコア: ${consecutiveWins} 点`;
                     lastScoreEl.classList.remove('hidden');
                     
                     consecutiveWins = 0; 
@@ -494,7 +520,7 @@
         }
 
         /**
-         * ★変更：配列シャッフル関数 (グローバルスコープに移動)
+         * 配列シャッフル関数 (変更なし)
          */
         function shuffleArray(array) {
             const newArray = [...array];
